@@ -1,52 +1,57 @@
-var AWS = require('aws-sdk');
+const AWS = require('aws-sdk')
 
-// AWS.config.update({
-//   accessKeyId: '{AWS_KEY}',
-//   secretAccessKey: '{AWS_SECRET}',
-//   region: '{SNS_REGION}'
-// });
+const SNS_ARN = 'arn:aws:sns:us-east-1:763079279002:app/GCM/AWS-SNS'
 
-var sns = new AWS.SNS();
+const aws = () => {
+  AWS.config.update({
+    region: process.env.AWS_REGION || 'us-east-1'
+  })
 
-sns.createPlatformEndpoint({
-  PlatformApplicationArn: 'arn:aws:sns:us-east-1:763079279002:app/GCM/AWS-SNS',
-  Token: '{DEVICE_TOKEN}'
-}, function(err, data) {
-  if (err) {
-    console.log(err.stack);
-    return;
+  const sns = new AWS.SNS()
+
+  const sendPushNofitication = async (message, arn) => {
+    return new Promise((resolve, reject) => {
+      let payload = {
+        default: message,
+        APNS: {
+          aps: {
+            alert: message
+          }
+        }
+      }
+
+      payload.APNS = JSON.stringify(payload.APNS)
+      payload = JSON.stringify(payload)
+
+      sns.publish({
+        Message: payload,
+        MessageStructure: 'json',
+        TargetArn: arn
+      }, (err, data) => {
+        if (err) return reject(err)
+        resolve(data)
+      })
+    })
   }
 
-  var endpointArn = data.EndpointArn;
+  const registerDeviceToken = async token => {
+    return new Promise((resolve, reject) => {
+      sns.createPlatformEndpoint({
+        PlatformApplicationArn: SNS_ARN,
+        Token: token
+      }, (err, data) => {
+        if (err) return reject(err)
+        resolve(data.EndpointArn)
+      })
+    })
+  }
 
-  var payload = {
-    default: 'Hello World',
-    APNS: {
-      aps: {
-        alert: 'Hello World',
-        sound: 'default',
-        badge: 1
-      }
-    }
-  };
+  return {
+    sendPushNofitication,
+    registerDeviceToken
+  }
+}
 
-  // first have to stringify the inner APNS object...
-  payload.APNS = JSON.stringify(payload.APNS);
-  // then have to stringify the entire message payload
-  payload = JSON.stringify(payload);
-
-  console.log('sending push');
-  sns.publish({
-    Message: payload,
-    MessageStructure: 'json',
-    TargetArn: endpointArn
-  }, function(err, data) {
-    if (err) {
-      console.log(err.stack);
-      return;
-    }
-
-    console.log('push sent');
-    console.log(data);
-  });
-});
+module.exports = {
+  aws
+}
